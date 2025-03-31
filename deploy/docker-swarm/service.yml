@@ -1,0 +1,131 @@
+version: '3.8'
+
+services:
+  traefik:
+    image: traefik:3.3.3
+    deploy:
+      mode: replicated
+      replicas: 1
+      restart_policy:
+        condition: any
+    command:
+      - "--log.level=DEBUG"
+      - "--log.filePath=/traefik_logs/traefik.log"
+      - "--api.dashboard=true"
+      - "--providers.swarm.endpoint=unix:///var/run/docker.sock"
+      - "--entrypoints.web.address=:80"
+      - "--entrypoints.websecure.address=:443"
+      - "--entrypoints.web.http.redirections.entryPoint.to=websecure"
+      - "--entrypoints.web.http.redirections.entryPoint.scheme=https"
+      - "--entrypoints.web.http.redirections.entrypoint.permanent=true"
+      - "--certificatesresolvers.myresolver.acme.email=mauro.oyhanart@gmail.com"
+      - "--certificatesresolvers.myresolver.acme.storage=/letsencrypt-certs/acme.json"
+      - "--certificatesresolvers.myresolver.acme.tlschallenge=true"
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./traefik/letsencrypt-certs:/letsencrypt-certs
+    networks:
+      - survey_network
+
+  survey-backend-postgres:
+    image: ghcr.io/maurooyhanart/surveyq/storage/backend:v1.0
+    deploy:
+      mode: replicated
+      replicas: 1
+      restart_policy:
+        condition: on-failure
+    env_file:
+      - .env.pg.backend
+    ports:
+      - "5432:5432"
+    volumes:
+      - survey_backend_data:/var/lib/postgresql/data
+    networks:
+      - survey_network
+
+  survey-session-postgres:
+    image: ghcr.io/maurooyhanart/surveyq/storage/session:v1.0
+    deploy:
+      mode: replicated
+      replicas: 1
+      restart_policy:
+        condition: on-failure
+    env_file:
+      - .env.pg.session
+    ports:
+      - "5433:5432"
+    volumes:
+      - survey_session_data:/var/lib/postgresql/data
+    networks:
+      - survey_network
+
+  survey-logging-postgres:
+    image: ghcr.io/maurooyhanart/surveyq/storage/logging:v1.0
+    deploy:
+      mode: replicated
+      replicas: 1
+      restart_policy:
+        condition: on-failure
+    env_file:
+      - .env.pg.logging
+    ports:
+      - "5434:5432"
+    volumes:
+      - survey_logging_data:/var/lib/postgresql/data
+    networks:
+      - survey_network
+
+  backend:
+    image: ghcr.io/maurooyhanart/surveyq/backend:v1.0
+    deploy:
+      mode: replicated
+      replicas: 1
+      restart_policy:
+        condition: on-failure
+      labels:
+        - "traefik.enable=true"
+        - "traefik.http.routers.survey-backend.rule=Host(`surveyq.mauro-oyhanart.com`) && (PathPrefix(`/api`) || PathPrefix(`/internal`) || PathPrefix(`/public`))"
+        - "traefik.http.routers.survey-backend.entrypoints=websecure"
+        - "traefik.http.routers.survey-backend.tls.certresolver=myresolver"
+        - "traefik.http.services.survey-backend.loadbalancer.server.port=8080"
+    networks:
+      - survey_network
+
+  session:
+    image: ghcr.io/maurooyhanart/surveyq/session:v1.0
+    deploy:
+      mode: replicated
+      replicas: 1
+      restart_policy:
+        condition: on-failure
+      labels:
+        - "traefik.enable=true"
+        - "traefik.http.routers.survey-session.rule=Host(`surveyq.mauro-oyhanart.com`) && PathPrefix(`/session`)"
+        - "traefik.http.routers.survey-session.entrypoints=websecure"
+        - "traefik.http.routers.survey-session.tls.certresolver=myresolver"
+        - "traefik.http.services.survey-session.loadbalancer.server.port=8080"
+    networks:
+      - survey_network
+
+  logging:
+    image: ghcr.io/maurooyhanart/surveyq/logging:v1.0
+    container_name: survey-logging
+    deploy:
+      mode: replicated
+      replicas: 1
+      restart_policy:
+        condition: on-failure
+    networks:
+      - survey_network
+
+volumes:
+  survey_backend_data:
+  survey_session_data:
+  survey_logging_data:
+
+networks:
+  survey_network:
+    driver: overlay

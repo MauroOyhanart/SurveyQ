@@ -1,0 +1,90 @@
+services:
+  survey-backend-postgres:
+    image: survey-backend-postgres
+    container_name: survey-backend-postgres
+    restart: unless-stopped
+    env_file:
+      - .env.pg.backend
+    ports:
+      - "5432:5432"
+    volumes:
+      - survey_backend_data:/var/lib/postgresql/data
+    networks:
+      - survey_network
+
+  survey-session-postgres:
+    image: survey-session-postgres
+    container_name: survey-session-postgres
+    restart: unless-stopped
+    env_file:
+      - .env.pg.session
+    ports:
+      - "5433:5432"
+    volumes:
+      - survey_session_data:/var/lib/postgresql/data
+    networks:
+      - survey_network
+
+  survey-logging-postgres:
+    image: survey-logging-postgres
+    container_name: survey-logging-postgres
+    restart: unless-stopped
+    env_file:
+      - .env.pg.logging
+    ports:
+      - "5434:5432"
+    volumes:
+      - survey_logging_data:/var/lib/postgresql/data
+    networks:
+      - survey_network
+
+  backend:
+    image: survey-backend:v1
+    container_name: survey-backend
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    networks:
+      - survey_network
+
+  session:
+    image: survey-session:v1
+    container_name: survey-session
+    restart: unless-stopped
+    ports:
+      - "8083:8080"
+    networks:
+      - survey_network
+
+  logging:
+    image: survey-logging:v1
+    container_name: survey-logging
+    restart: unless-stopped
+    ports:
+      - "8084:8080"
+    volumes:
+      - ./logs:/logs
+    networks:
+      - survey_network
+
+  pgadmin:
+    image: dpage/pgadmin4
+    container_name: pgadmin4
+    restart: unless-stopped
+    environment:
+      PGADMIN_DEFAULT_EMAIL: user@pgadmin.com
+      PGADMIN_DEFAULT_PASSWORD: pgadmin
+    ports:
+      - "5051:80"
+    networks:
+      - survey_network
+
+volumes:
+  survey_backend_data:
+  survey_session_data:
+  survey_logging_data:
+
+networks:
+  survey_network:
+    name: survey_network
+    external: false

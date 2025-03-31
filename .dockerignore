@@ -1,0 +1,7 @@
+deploy/
+**/target
+target/
+.idea/
+.git
+.github
+**/build.sh

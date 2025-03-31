@@ -1,0 +1,151 @@
+services:
+  traefik:
+    image: traefik:2.11
+    container_name: traefik
+    restart: always
+    command:
+      - "--log.filePath=/traefik_logs/traefik.log"
+      - "--api.dashboard=true"
+      - "--providers.docker=true"
+      - "--providers.docker.exposedbydefault=false"
+      - "--providers.docker.network=survey_network"
+      - "--entrypoints.web.address=:80"
+      - "--entrypoints.websecure.address=:443"
+      - "--entrypoints.web.http.redirections.entryPoint.to=websecure"
+      - "--entrypoints.web.http.redirections.entryPoint.scheme=https"
+      - "--entrypoints.web.http.redirections.entrypoint.permanent=true"
+      - "--certificatesresolvers.myresolver.acme.email=mauro.oyhanart@gmail.com"
+      - "--certificatesresolvers.myresolver.acme.storage=/letsencrypt-certs/acme.json"
+      - "--certificatesresolvers.myresolver.acme.tlschallenge=true"
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./letsencrypt-certs:/letsencrypt-certs
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.traefik.rule=Host(`mauro-oyhanart.com`) && (PathPrefix(`/traefik`) || Headers(`Referer`, `https://mauro-oyhanart.com/traefik/dashboard/`))"
+      - "traefik.http.routers.traefik.entrypoints=websecure"
+      - "traefik.http.routers.traefik.tls.certresolver=myresolver"
+      - "traefik.http.routers.traefik.service=api@internal"
+      - "traefik.http.routers.traefik.middlewares=traefik-auth,traefik-stripprefix"
+      - "traefik.http.middlewares.traefik-auth.basicauth.users=mauro:$$apr1$$R5fczwpf$$8.vQfWvFARetljUqGBcS/1"   #echo $(htpasswd -nb user2 test123) | sed -e s/\\$/\\$\\$/g
+      - "traefik.http.middlewares.traefik-stripprefix.stripprefix.prefixes=/traefik"
+    networks:
+      - survey_network
+
+  survey-backend-postgres:
+    image: survey-backend-postgres
+    container_name: survey-backend-postgres
+    restart: unless-stopped
+    env_file:
+      - .env.pg.backend
+    ports:
+      - "5432:5432"
+    volumes:
+      - survey_backend_data:/var/lib/postgresql/data
+    networks:
+      - survey_network
+
+  survey-session-postgres:
+    image: survey-session-postgres
+    container_name: survey-session-postgres
+    restart: unless-stopped
+    env_file:
+      - .env.pg.session
+    ports:
+      - "5433:5432"
+    volumes:
+      - survey_session_data:/var/lib/postgresql/data
+    networks:
+      - survey_network
+
+  survey-logging-postgres:
+    image: survey-logging-postgres
+    container_name: survey-logging-postgres
+    restart: unless-stopped
+    env_file:
+      - .env.pg.logging
+    ports:
+      - "5434:5432"
+    volumes:
+      - survey_logging_data:/var/lib/postgresql/data
+    networks:
+      - survey_network   
+
+  backend:
+    image: survey-backend:v1
+    container_name: survey-backend
+    restart: unless-stopped
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.survey-backend.rule=Host(`surveyq.mauro-oyhanart.com`) && (PathPrefix(`/api`) || PathPrefix(`/internal`) || PathPrefix(`/public`))"
+      # HTTPS
+      - "traefik.http.routers.survey-backend.entrypoints=websecure"
+      - "traefik.http.routers.survey-backend.tls.certresolver=myresolver"
+      # Service
+      - "traefik.http.services.survey-backend.loadbalancer.server.port=8080"
+      # Catch-all router
+      - "traefik.http.routers.catch-all.rule=Host(`surveyq.mauro-oyhanart.com`)"
+      - "traefik.http.routers.catch-all.priority=1"
+      - "traefik.http.routers.catch-all.entrypoints=websecure"
+      - "traefik.http.routers.catch-all.tls.certresolver=myresolver"
+      - "traefik.http.services.catch-all.loadbalancer.server.port=8080"
+    networks:
+      - survey_network
+
+  session:
+    image: survey-session:v1
+    container_name: survey-session
+    restart: unless-stopped
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.survey-session.rule=Host(`surveyq.mauro-oyhanart.com`) && PathPrefix(`/session`)"
+      # HTTPS
+      - "traefik.http.routers.survey-session.entrypoints=websecure"
+      - "traefik.http.routers.survey-session.tls.certresolver=myresolver"
+      # Service
+      - "traefik.http.services.survey-session.loadbalancer.server.port=8080"
+    networks:
+      - survey_network
+
+  logging:
+    image: survey-logging:v1
+    container_name: survey-logging
+    restart: unless-stopped
+    volumes:
+      - ./logs:/logs
+    networks:
+      - survey_network
+
+  pgadmin:
+    image: dpage/pgadmin4
+    container_name: pgadmin4
+    restart: unless-stopped
+    environment:
+      PGADMIN_DEFAULT_EMAIL: user@pgadmin.com
+      PGADMIN_DEFAULT_PASSWORD: pgadmin
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.pgadmin.rule=Host(`pgadmin.mauro-oyhanart.com`)"
+      # HTTPS
+      - "traefik.http.routers.pgadmin.entrypoints=websecure"
+      - "traefik.http.routers.pgadmin.tls.certresolver=myresolver"
+      # Service
+      - "traefik.http.services.pgadmin.loadbalancer.server.port=80"
+      # Auth
+      - "traefik.http.middlewares.auth.basicauth.users=mauro:$$apr1$$R5fczwpf$$8.vQfWvFARetljUqGBcS/1" # echo $(htpasswd -nb user2 test123) | sed -e s/\\$/\\$\\$/g
+      # Middlewares
+      - "traefik.http.routers.pgadmin.middlewares=auth"
+    networks:
+      - survey_network
+
+volumes:
+  survey_backend_data:
+  survey_session_data:
+
+networks:
+  survey_network:
+    name: survey_network
+    external: false
