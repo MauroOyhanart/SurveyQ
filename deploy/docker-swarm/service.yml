@@ -91,6 +91,8 @@ services:
         - "traefik.http.routers.survey-backend.entrypoints=websecure"
         - "traefik.http.routers.survey-backend.tls.certresolver=myresolver"
         - "traefik.http.services.survey-backend.loadbalancer.server.port=8080"
+    env_file:
+      - .env.backend
     networks:
       - survey_network
 
@@ -107,6 +109,8 @@ services:
         - "traefik.http.routers.survey-session.entrypoints=websecure"
         - "traefik.http.routers.survey-session.tls.certresolver=myresolver"
         - "traefik.http.services.survey-session.loadbalancer.server.port=8080"
+    env_file:
+      - .env.session
     networks:
       - survey_network
 
@@ -118,6 +122,8 @@ services:
       replicas: 1
       restart_policy:
         condition: on-failure
+    env_file:
+      - .env.logging
     networks:
       - survey_network
 
