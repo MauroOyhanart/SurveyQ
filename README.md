@@ -31,7 +31,7 @@ Features:
 - log in as USER or ADMIN
 - authentication and authorization for all types of object access (read, write, etc)
 
-A more in depth documentation of this module and the use of JPA, Tests and Patters in Spring, exists in [backend README file](backend/README.md).
+A more in depth documentation of this module and the use of JPA, Tests and patterns in Spring, exists in [backend README file](backend/README.md).
 
 ## Session
 
