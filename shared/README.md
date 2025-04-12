@@ -45,6 +45,4 @@ This is done like this so that logging via http doesn't slow down the applicatio
 
 The Spring IoC container will manage the lifecycle of our java objects; we can hook events via annotations (or other ways) to initialize objects, perform integrity checks, or close any resources attached to the objects prior to their destruction.
 
-To mantain simplicity, we are not using spring features; we are using the API of the JVM (via the @PreDestroy annotation) to hook an event before the destruction of our executor.
-
 In this case, we shutdown the executor when the application is about to finish, to release any resources attached to it.
